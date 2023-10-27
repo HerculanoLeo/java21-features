@@ -1,4 +1,4 @@
-package com.herculanoleo.models.shape;
+package com.herculanoleo.models.exception;
 
 public class InvalidShapeException extends RuntimeException {
     public InvalidShapeException(String message) {

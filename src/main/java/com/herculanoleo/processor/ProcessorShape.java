@@ -1,5 +1,6 @@
 package com.herculanoleo.processor;
 
+import com.herculanoleo.models.exception.InvalidShapeException;
 import com.herculanoleo.models.shape.*;
 
 import java.math.BigDecimal;

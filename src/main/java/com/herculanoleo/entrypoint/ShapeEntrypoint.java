@@ -1,5 +1,7 @@
 package com.herculanoleo.entrypoint;
 
+import com.herculanoleo.models.exception.InvalidShapeException;
+import com.herculanoleo.models.exception.JumpingOptionsException;
 import com.herculanoleo.models.shape.*;
 import com.herculanoleo.processor.ProcessorShape;
 

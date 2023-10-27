@@ -1,4 +1,4 @@
-package com.herculanoleo.entrypoint;
+package com.herculanoleo.models.exception;
 
 public class JumpingOptionsException extends RuntimeException{
 }
