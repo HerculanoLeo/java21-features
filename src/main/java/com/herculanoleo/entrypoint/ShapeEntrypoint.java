@@ -4,10 +4,12 @@ import com.herculanoleo.models.exception.InvalidShapeException;
 import com.herculanoleo.models.exception.JumpingOptionsException;
 import com.herculanoleo.models.shape.*;
 import com.herculanoleo.processor.ProcessorShape;
+import lombok.extern.log4j.Log4j2;
 
 import java.util.List;
 import java.util.Scanner;
 
+@Log4j2
 public class ShapeEntrypoint implements Entrypoint {
 
     public final static ShapeEntrypoint shared = new ShapeEntrypoint();
@@ -40,9 +42,9 @@ public class ShapeEntrypoint implements Entrypoint {
                     default -> throw new RuntimeException("Invalid option");
                 }
             } catch (JumpingOptionsException ignored) {
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception ex) {
                 System.out.println("Please enter with a valid option");
+                log.error("An error occurred", ex);
             }
         }
     }
@@ -153,9 +155,9 @@ public class ShapeEntrypoint implements Entrypoint {
 
             } catch (JumpingOptionsException e) {
                 throw e;
-            } catch (Exception e) {
-                e.printStackTrace();
+            } catch (Exception ex) {
                 System.out.println("Please enter with a valid option");
+                log.error("An error occurred", ex);
             }
         }
     }
