@@ -18,7 +18,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -34,7 +35,7 @@ public class ProcessorFile {
 
     protected final FileFilter isFile = FileFilterUtils.fileFileFilter();
 
-    protected final static int threadsPerFile = 8;
+    protected final static int threadsPerFile = 256;
 
     protected final static int oneMegaBytesInBytes = 1048576;
 
@@ -101,7 +102,7 @@ public class ProcessorFile {
     }
 
     protected Collection<ProcessFileResult> processFiles(final Collection<File> files) {
-        var processResult = new Vector<ProcessFileResult>(files.size());
+        var processResult = new ConcurrentLinkedQueue<ProcessFileResult>();
 
         try (var executor = Executors.newThreadPerTaskExecutor(
                 Thread.ofVirtual()
@@ -125,7 +126,7 @@ public class ProcessorFile {
         try {
             log.info("Start hash processing of file {}", file.getAbsolutePath());
 
-            var concurrentHashResult = new ConcurrentLinkedDeque<ProcessHashResult>();
+            var concurrentHashResult = new ConcurrentLinkedQueue<ProcessHashResult>();
 
             try (var inputStream = Files.newInputStream(file.toPath())) {
                 var maxBytesAlloc = oneMegaBytesInBytes * 10;
