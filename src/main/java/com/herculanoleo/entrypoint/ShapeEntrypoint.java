@@ -12,7 +12,7 @@ import java.util.Scanner;
 @Log4j2
 public class ShapeEntrypoint implements Entrypoint {
 
-    public final static ShapeEntrypoint shared = new ShapeEntrypoint();
+    public final static Entrypoint shared = new ShapeEntrypoint();
 
     protected final static Scanner scanner = new Scanner(System.in);
 

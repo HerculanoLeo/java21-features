@@ -12,7 +12,7 @@ import java.util.Scanner;
 @Log4j2
 public class FileEntrypoint implements Entrypoint {
 
-    public static final FileEntrypoint shared = new FileEntrypoint();
+    public static final Entrypoint shared = new FileEntrypoint();
 
     protected final static Scanner scanner = new Scanner(System.in);
 

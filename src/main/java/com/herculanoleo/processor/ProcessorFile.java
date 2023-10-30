@@ -76,6 +76,7 @@ public class ProcessorFile {
             fileExecutorCount.set(0);
             hashExecutorCount.set(0);
             log.info("The total processing time was {}s", Duration.between(startAt, LocalDateTime.now()).getSeconds());
+            System.gc();
         }
     }
 
@@ -107,41 +108,26 @@ public class ProcessorFile {
                         .name(String.format("file-executor-%s", fileExecutorCount.getAndIncrement()))
                         .factory()
         )) {
-            var futures = new ArrayList<Future<Boolean>>();
-
             for (var file : files) {
-                log.info("Start processing of file: {}", file.getAbsolutePath());
-                var future = executor.submit(() -> this.processFile(file).thenApply((processResult::add)).get());
-                futures.add(future);
-            }
-
-            for (var future : futures) {
-                try {
-                    future.get();
-                } catch (Exception ex) {
-                    log.error("An error occurred while processing the files", ex);
-                    throw new ProcessFileException();
-                }
+                executor.submit(() -> {
+                    var hashResult = this.processFile(file);
+                    processResult.add(hashResult);
+                });
             }
         }
 
         return processResult;
     }
 
-    protected CompletableFuture<ProcessFileResult> processFile(final File file) {
+    protected ProcessFileResult processFile(final File file) {
         var startAt = LocalDateTime.now();
 
-        try (var executor = Executors.newThreadPerTaskExecutor(
-                Thread.ofVirtual()
-                        .name(String.format("hash-executor-%s", hashExecutorCount.getAndIncrement()))
-                        .factory()
-        )) {
-            var completionService = new ExecutorCompletionService<ProcessHashResult>(executor);
+        try {
             log.info("Start hash processing of file {}", file.getAbsolutePath());
 
-            try (var inputStream = Files.newInputStream(file.toPath())) {
-                var hashResult = new LinkedList<ProcessHashResult>();
+            var concurrentHashResult = new ConcurrentLinkedDeque<ProcessHashResult>();
 
+            try (var inputStream = Files.newInputStream(file.toPath())) {
                 var maxBytesAlloc = oneMegaBytesInBytes * 10;
 
                 if (maxBytesAlloc > inputStream.available()) {
@@ -153,72 +139,64 @@ public class ProcessorFile {
                 var partsProcessed = new AtomicInteger();
                 var concurrentExec = new AtomicInteger();
 
-                do {
+                while (inputStream.available() > 0) {
                     final var actualExec = concurrentExec.getAndIncrement();
-
                     inputStream.readNBytes(bytesBlocks.get(actualExec), 0, maxBytesAlloc);
 
-                    final var lambdaPartProcessed = partsProcessed.incrementAndGet();
-                    completionService.submit(() -> getSHA256Hash(lambdaPartProcessed, bytesBlocks.get(actualExec)));
+                    if (actualExec == (threadsPerFile - 1) || (inputStream.available() == 0 && concurrentExec.get() > 0)) {
+                        try (var executor = Executors.newThreadPerTaskExecutor(
+                                Thread.ofVirtual()
+                                        .name(String.format("hash-executor-%s", hashExecutorCount.getAndIncrement()))
+                                        .factory()
+                        )) {
+                            for (var i = 0; i < concurrentExec.get(); i++) {
+                                final var lambdaPartProcessed = partsProcessed.incrementAndGet();
+                                executor.submit(() -> {
+                                    log.debug("Start processing part {}", lambdaPartProcessed + 1);
+                                    var hash = getSHA256Hash(bytesBlocks.get(actualExec));
+                                    log.debug("Finish processing part {}", lambdaPartProcessed + 1);
+                                    concurrentHashResult.add(new ProcessHashResult(lambdaPartProcessed, hash));
+                                });
+                            }
+                        }
+                        bytesBlocks.forEach(b -> Arrays.fill(b, (byte) 0));
+                        concurrentExec.set(0);
+                    }
 
                     if (bytesBlocks.size() < threadsPerFile) {
                         bytesBlocks.add(new byte[maxBytesAlloc]);
                     }
-
-                    if (actualExec == (threadsPerFile - 1)) {
-                        for (int i = 0; i <= actualExec; i++) {
-                            var future = completionService.take();
-                            var result = future.get();
-                            hashResult.add(result);
-                        }
-
-                        bytesBlocks.forEach(b -> Arrays.fill(b, (byte) 0));
-
-                        concurrentExec.set(0);
-                    }
-                } while (inputStream.available() > 0);
-
-                if (concurrentExec.get() > 0) {
-                    for (var i = 0; i < concurrentExec.get(); i++) {
-                        var future = completionService.take();
-                        var result = future.get();
-                        hashResult.add(result);
-                    }
                 }
-
-                hashResult.sort(Comparator.comparingInt(ProcessHashResult::position));
-
-                var intermediaryHash = hashResult.stream().map(ProcessHashResult::hash).collect(Collectors.joining());
-
-                log.debug("Consolidating hash: {}", file.getName());
-                var result = executor.submit(() -> this.getSHA256Hash(0, intermediaryHash.getBytes(StandardCharsets.UTF_8))).get();
-
-                log.info("The hash processing of file {} has been completed with success", file.getAbsolutePath());
-                return CompletableFuture.completedFuture(new ProcessFileResult(
-                        true,
-                        file,
-                        result.hash(),
-                        Duration.between(startAt, LocalDateTime.now()).getSeconds()
-                ));
             }
+
+            log.debug("Consolidating hash: {}", file.getName());
+            var intermediaryHash = concurrentHashResult.stream()
+                    .sorted(Comparator.comparingInt(ProcessHashResult::position))
+                    .map(ProcessHashResult::hash)
+                    .collect(Collectors.joining());
+
+            var consolidateHash = this.getSHA256Hash(intermediaryHash.getBytes(StandardCharsets.UTF_8));
+
+            log.info("The hash processing of file {} has been completed with success", file.getAbsolutePath());
+            return new ProcessFileResult(
+                    true,
+                    file,
+                    consolidateHash,
+                    Duration.between(startAt, LocalDateTime.now()).getSeconds()
+            );
         } catch (Exception ex) {
             log.error("The hash processing of file {} has been completed with failed", file.getAbsolutePath(), ex);
-            return CompletableFuture.completedFuture(new ProcessFileResult(
+            return new ProcessFileResult(
                     false,
                     file,
                     ex.getMessage(),
                     Duration.between(startAt, LocalDateTime.now()).getSeconds()
-            ));
-        } finally {
-            System.gc();
+            );
         }
     }
 
-    protected ProcessHashResult getSHA256Hash(final Integer position, final byte[] bytes) {
-        log.debug("Start processing part {}", position + 1);
-        var hash = DigestUtils.sha256Hex(bytes);
-        log.debug("Finish processing part {}", position + 1);
-        return new ProcessHashResult(position, hash);
+    protected String getSHA256Hash(final byte[] bytes) {
+        return DigestUtils.sha256Hex(bytes);
     }
 
 }
