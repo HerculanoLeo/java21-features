@@ -20,6 +20,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -35,9 +36,13 @@ public class ProcessorFile {
 
     protected final FileFilter isFile = FileFilterUtils.fileFileFilter();
 
-    protected final static int threadsPerFile = 256;
+    protected final static int threadsPerFile = 2;
 
     protected final static int oneMegaBytesInBytes = 1048576;
+
+    protected final static Semaphore fileSemaphore = new Semaphore(Runtime.getRuntime().availableProcessors() * 128);
+
+    protected final static Semaphore hashSemaphore = new Semaphore(Runtime.getRuntime().availableProcessors() * 1024);
 
     protected final static AtomicInteger fileExecutorCount = new AtomicInteger();
 
@@ -111,8 +116,15 @@ public class ProcessorFile {
         )) {
             for (var file : files) {
                 executor.submit(() -> {
-                    var hashResult = this.processFile(file);
-                    processResult.add(hashResult);
+                    try {
+                        fileSemaphore.acquire();
+                        var hashResult = this.processFile(file);
+                        processResult.add(hashResult);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    } finally {
+                        fileSemaphore.release();
+                    }
                 });
             }
         }
@@ -153,10 +165,17 @@ public class ProcessorFile {
                             for (var i = 0; i < concurrentExec.get(); i++) {
                                 final var lambdaPartProcessed = partsProcessed.incrementAndGet();
                                 executor.submit(() -> {
-                                    log.debug("Start processing part {}", lambdaPartProcessed + 1);
-                                    var hash = getSHA256Hash(bytesBlocks.get(actualExec));
-                                    log.debug("Finish processing part {}", lambdaPartProcessed + 1);
-                                    concurrentHashResult.add(new ProcessHashResult(lambdaPartProcessed, hash));
+                                    try {
+                                        hashSemaphore.acquire();
+                                        log.debug("Start processing part {}", lambdaPartProcessed + 1);
+                                        var hash = getSHA256Hash(bytesBlocks.get(actualExec));
+                                        log.debug("Finish processing part {}", lambdaPartProcessed + 1);
+                                        concurrentHashResult.add(new ProcessHashResult(lambdaPartProcessed, hash));
+                                    } catch (InterruptedException ex) {
+                                        throw new RuntimeException(ex);
+                                    } finally {
+                                        hashSemaphore.release();
+                                    }
                                 });
                             }
                         }

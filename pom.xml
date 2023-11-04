@@ -3,11 +3,11 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.herculanoleo</groupId>
-  <artifactId>java21-test</artifactId>
+  <artifactId>java21-features</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
 
-  <name>java21-test</name>
+  <name>java21-features</name>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
