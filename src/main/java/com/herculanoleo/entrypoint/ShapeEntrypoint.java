@@ -69,7 +69,7 @@ public class ShapeEntrypoint implements Entrypoint {
                     System.out.printf(
                             "The distance between point %s to point %s are %s%n",
                             alphabetic.get(i),
-                            alphabetic.get(0),
+                            alphabetic.getFirst(),
                             distances.get(i)
                     );
                 } else {
@@ -123,7 +123,7 @@ public class ShapeEntrypoint implements Entrypoint {
                             "The angle of %s%s%s is %s%n",
                             alphabetic.get(i - 1),
                             alphabetic.get(i),
-                            alphabetic.get(0),
+                            alphabetic.getFirst(),
                             angles.get(i)
                     );
                 }

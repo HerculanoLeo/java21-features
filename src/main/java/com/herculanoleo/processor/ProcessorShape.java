@@ -66,15 +66,15 @@ public class ProcessorShape {
     }
 
     public BigDecimal angleOf(final CartesianPoint a, final CartesianPoint b, final CartesianPoint c) {
-        var vectorAB = new CartesianPoint(b.x().subtract(a.x()), b.y().subtract(a.y()));
-        var vectorBC = new CartesianPoint(c.x().subtract(a.x()), c.y().subtract(a.y()));
+        var vectorAB = vectorOf(a, b);
+        var vectorAC = vectorOf(a, c);
 
-        var vecProduct = vectorAB.x().multiply(vectorBC.x()).add(vectorAB.y().multiply(vectorBC.y()));
+        var vecProduct = vectorAB.x().multiply(vectorAC.x()).add(vectorAB.y().multiply(vectorAC.y()));
 
         var distanceAB = distanceOf(a, b);
-        var distanceBC = distanceOf(a, c);
+        var distanceAC = distanceOf(a, c);
 
-        var disProduct = distanceAB.multiply(distanceBC);
+        var disProduct = distanceAB.multiply(distanceAC);
 
         var angle = vecProduct.divide(disProduct, precision);
 
@@ -187,6 +187,10 @@ public class ProcessorShape {
                 }).multiply(semiPerimeter, precision);
 
         return computed.sqrt(precision);
+    }
+
+    protected CartesianPoint vectorOf(final CartesianPoint point1, final CartesianPoint point2) {
+        return new CartesianPoint(point2.x().subtract(point1.x()), point2.y().subtract(point1.y()));
     }
 
 }
